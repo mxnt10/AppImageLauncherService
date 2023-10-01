@@ -1,0 +1,571 @@
+#!/bin/bash
+#
+# /etc/rc.d/rc.AppImageLauncher
+#
+################################################################
+#
+# Automation service for integrating AppImages for Slackware.
+#
+# Developed by Mauricio Ferrari (m10ferrari1200@gmail.com)
+# Licenced under GNU General Public License v3.0
+#
+################################################################
+#
+# Service Installation:
+#
+# chmod +x rc.AppImageLauncher
+# ./rc.AppImageLauncher install
+#
+# After installation, the service will be operational.
+# Do not use root for install service.
+#
+#
+# Commands:
+#
+# install     - install and active service.
+# reinstall   - reinstall and restart service.
+# uninstall   - uninstall service.
+# start       - start service.
+# stop        - stop service.
+# restart     - restart service.
+# configure   - open the configuration file.
+# reconfigure - reconfigure service configuration file.
+# status      - view current service status.
+#
+################################################################
+
+prg='AppImageLauncher'
+srvdir='/etc/rc.d'
+bindir='/usr/bin'
+pid="/tmp/$prg.pid"
+local='/etc/rc.d/rc.local'
+
+conf="$srvdir/rc.$prg.conf"
+service="$srvdir/rc.$prg"
+binary="$bindir/${prg}Service"
+
+locals_icon="usr/share/icons/hicolor/scalable/apps
+share/icons/hicolor/scalable/apps
+usr/share/icons/hicolor/256x256/apps
+share/icons/hicolor/256x256/apps
+usr/share/icons/hicolor/128x128/apps
+share/icons/hicolor/128x128/apps
+usr/share/icons/hicolor/64x64/apps
+share/icons/hicolor/64x64/apps
+usr/share/icons/hicolor/48x48/apps
+share/icons/hicolor/48x48/apps"
+
+
+# service in operation
+test "${0##*/}" == "${prg}Service" && {
+
+    # parms in configuration file
+    : "$(grep -E "^APPIMAGE_DIR" "$conf")"; appimage_dir="${_##*=}"
+    : "$(grep -E "^DESKTOP_DIR" "$conf")"; desktop_dir="${_##*=}"
+    : "$(grep -E "^ICON_DIR" "$conf")"; icon_dir="${_##*=}"
+    : "$(grep -E "^DIRECTORY_DIR" "$conf")"; directory_dir="${_##*=}"
+    : "$(grep -E "^MENU_DIR" "$conf")"; menu_dir="${_##*=}"
+    : "$(grep -E "^USER_GROUP" "$conf")"; user_group="${_##*=}"
+    : "$(grep -E "^CREATE_MENU" "$conf")"; create_menu="${_##*=}"
+
+    : $(grep -E "^LOOP_TIME" "$conf"); loop_time=${_##*=}
+
+echo -e "
+appimage dir: $appimage_dir
+desktop dir: $desktop_dir
+icon dir: $icon_dir
+directory dir: $directory_dir
+menu dir: $menu_dir
+user group: $user_group
+create menu: $create_menu"
+
+    count=0
+
+    while true
+    do
+
+        update_desktop_db="false"
+
+        # generate pid
+        test ! -f "$pid" && {
+            echo "$$" > "$pid"
+            chown "$user_group" "$pid"
+        }
+
+        # verify if appimage dir is a directory
+        test -d "$appimage_dir" && {
+
+            cd "$appimage_dir"
+            lst=$(printf "%s\n" *)
+
+            # check if directory is not empty
+            test "$lst" != '*' && {
+
+                p=(*)
+                test "$count" != "${#p[@]}" && count=${#p[@]} || {
+                    sleep $loop_time
+                    continue
+                }
+
+                default_ifs="$IFS"
+                IFS=$'\n' # for using \n and not space
+
+                for app in $lst
+                {
+
+                    # rename files wich space
+                    if grep -q " " <<< "$app"
+                    then
+                        new_name=${app// /-}
+
+                        mv "$app" "$new_name"
+                        app="$new_name"
+                    fi
+                    IFS="$default_ifs"
+
+                    # check if appimage as integrated
+                    if ! grep -q "$appimage_dir/$app" $desktop_dir/*.desktop
+                    then
+                        cd "$icon_dir"
+
+                        test ! -d tmp && {
+                            mkdir -p tmp
+                            chown "$user_group" tmp
+                        }
+                        cd tmp
+
+                        # extract icon file
+                        for i in "svg" "png"
+                        {
+                            "$appimage_dir/$app" --appimage-extract *.$i || true
+                        }
+
+                        icon_file=$(echo squashfs-root/*.??g)
+                        icon=${icon_file##*/}
+
+                        # extract icon using symbolic link
+                        test -h "$icon_file" && {
+
+                            head_icon="$(readlink "$icon_file")"
+                            "$appimage_dir/$app" --appimage-extract "$head_icon" || true
+
+                            # extract alternative icons
+                            test ! -e "squashfs-root/$head_icon" && {
+                                rm "$icon_file"
+
+                                for local in $locals_icon
+                                {
+                                    for i in "svg" "png"
+                                    {
+                                        "$appimage_dir/$app" --appimage-extract $local/*.$i || true
+
+                                        icons="$(cd "squashfs-root/$local"; echo *.??g)"
+                                        icon=${icons%% *}
+                                    }
+
+                                    # copy icons
+                                    for ico in $icons
+                                    {
+                                        file_copy="squashfs-root/$local/$ico"
+                                        test -e "$file_copy" && cp "$file_copy" ../
+                                    }
+                                    break
+                                }
+                            } || {
+
+                                # copy icons
+                                test "${icon%%.*}" == "icon" && {
+                                    icon="${app%%.*}.${icon##*.}"
+                                    cp -T "squashfs-root/$head_icon" ../$icon
+                                } || {
+                                    cp "squashfs-root/$head_icon" ../
+                                }
+                            }
+                        } || {
+
+                            # copy icons
+                            test "${icon%%.*}" == "icon" && {
+                                icon="${app%%.*}.${icon##*.}"
+                                cp -T "$icon_file" ../$icon
+                            } || {
+                                cp "$icon_file" ../
+                            }
+                        }
+
+                        cd ..
+                        rm -rf tmp || true
+
+                        cd "$desktop_dir"
+
+                        test ! -d tmp && {
+                            mkdir -p tmp
+                            chown "$user_group" tmp
+                        }
+                        cd tmp
+
+                        # extract desktop file
+                        "$appimage_dir/$app" --appimage-extract *.desktop || true
+
+                        desktop_file=$(echo squashfs-root/*.desktop)
+                        desk=${desktop_file##*/}
+
+                        # check if dektop file is symbolic link
+                        test -h "$desktop_file" && {
+                            head_desk="$(readlink "$desktop_file")"
+                            "$appimage_dir/$app" --appimage-extract "$head_desk" || true
+                            cp "squashfs-root/$head_desk" ../
+                        } || {
+                            cp "$desktop_file" ../
+                        }
+
+                        cd ..
+                        rm -rf tmp || true
+
+                        # edit desktop file
+                        sed -i "s:Exec=.*:Exec=$appimage_dir/$app:" "$desk"
+                        sed -i "s:Icon=.*:Icon=$icon_dir/$icon:" "$desk"
+
+                        chown "$user_group" "$desk"
+                        chown "$user_group" "$icon_dir/$icon"
+
+                        update_desktop_db="true"
+                    fi
+
+                } # loop for
+
+            } # appimage_dir empty
+
+        } # check appimage_dir
+
+
+        cd "$desktop_dir"
+
+        # verify remove appimage
+        for del_file in $(grep "$appimage_dir" *.desktop)
+        {
+            test ! -e ${del_file##*=} && {
+                rm ${del_file%%:*}
+                update_desktop_db="true"
+            }
+        }
+
+        # verify desktop file in custom menu
+        test "$create_menu" == "true" && {
+            for desk_file in $(grep "$appimage_dir" *.desktop)
+            {
+                menu_file="$menu_dir/$prg.menu"
+
+                if ! grep -q "${desk_file%%:*}" "$menu_file"
+                then
+                    sed -i -e "s|<[!]-- include -->|<Include><Filename>${desk_file%%:*}</Filename></Include>\n    <!-- include -->|" "$menu_file"
+                    update_desktop_db="true"
+                fi
+            }
+        }
+
+        # update menu system
+        test "$update_desktop_db" == "true" && {
+            /usr/bin/update-desktop-database -q || true
+
+            test -e usr/share/icons/hicolor/icon-theme.cache && {
+                test -x /usr/bin/gtk-update-icon-cache && /usr/bin/gtk-update-icon-cache "$icon_dir" 2>&1 >&- || true
+            }
+        }
+
+        sleep $loop_time
+    done
+
+    exit 0
+}
+
+
+# create configuration file (default current user)
+function create_conf
+{
+    echo "create config file $conf"
+    appimage_dir="$HOME/$prg"
+    desktop_dir="$HOME/.local/share/applications"
+    icon_dir="$HOME/.local/share/pixmaps"
+    directory_dir="$HOME/.local/share/desktop-directories"
+    menu_dir="$HOME/.config/menus/applications-merged"
+
+    desk_file="$directory_dir/$prg.directory"
+    menu_file="$menu_dir/$prg.menu"
+
+    user_group="$(cut -d: -f3-4 <(grep -E "^$USER:" /etc/passwd))"
+
+# create configuration file
+echo -e "
+APPIMAGE_DIR=$appimage_dir
+
+DESKTOP_DIR=$desktop_dir
+ICON_DIR=$icon_dir
+
+DIRECTORY_DIR=$directory_dir
+MENU_DIR=$menu_dir
+
+USER_GROUP=$user_group
+
+CREATE_MENU=false
+LOOP_TIME=2
+" | sudo tee "$conf"
+
+    test ! -d "$appimage_dir" && mkdir -p "$appimage_dir"
+    test ! -d "$desktop_dir" && mkdir -p "$desktop_dir"
+    test ! -d "$icon_dir" && mkdir -p "$icon_dir"
+    test ! -d "$directory_dir" && mkdir -p "$directory_dir"
+    test ! -d "$menu_dir" && mkdir -p "$menu_dir"
+
+    test ! -f "$desk_file" && {
+
+# create desktop directory file
+echo "[Desktop Entry]
+Version=1.0
+Type=Directory
+Name=$prg
+Icon=applications-system" > "$desk_file"
+
+    }
+
+    test ! -f "$menu_file" && {
+
+# create menu file
+echo "<!DOCTYPE Menu PUBLIC \"-//freedesktop//DTD Menu 1.0//EN\"
+    \"http://www.freedesktop.org/standards/menu-spec/menu-1.0.dtd\">
+<Menu>
+  <Name>Applications</Name>
+  <Menu>
+    <Name>$prg</Name>
+    <Directory>$prg.directory</Directory>
+    <!-- include -->
+  </Menu>
+</Menu>" > "$menu_file"
+
+    }
+}
+
+
+# active service in the rc.local
+function enable_system
+{
+    echo "enable service in $local"
+    if ! grep -qE "^# AppImageLauncher$" "$local"
+    then
+        echo -e "\n# AppImageLauncher\ntest -x $service && $service start" | sudo tee -a "$local"
+    fi
+}
+
+
+# open the configuration file
+function appimage_config
+{
+    test ! -f "$conf" && create_conf
+    sudo vi "$conf"
+}
+
+
+# install and active service
+function appimage_install
+{
+
+    # install service
+    test ! -f "$service" && {
+        echo "install service $service"
+        sudo install -m644 "$0" "$srvdir"
+        sudo chmod +x "$service"
+    }
+
+    # install config
+    test ! -f "$conf" && create_conf
+
+    # create link and active service
+    test ! -h "$binary" && {
+        echo "create link $binary"
+        sudo ln -s "$service" "$binary"
+        appimage_start
+    }
+
+    # enable in start system
+    enable_system
+}
+
+
+# reinstall and restart service
+function appimage_reinstall
+{
+
+    # stop service
+    test -f "$pid" && {
+        kill_service
+
+        while true
+        do
+            if ! grep -qE "^([ ]*)*$(< "$pid")" <(ps ax)
+            then
+                remove_pid
+                break
+            fi
+            sleep 1
+        done
+    }
+
+    # reinstall service
+    echo "install service $service"
+    sudo install -m644 "$0" "$srvdir"
+    sudo chmod +x "$service"
+
+    # verify config
+    test ! -f "$conf" && create_conf
+
+    echo "create link $binary"
+    sudo ln -sf "$service" "$binary"
+    appimage_start
+
+    # enable in start system
+    enable_system
+}
+
+
+# uninstall service
+function appimage_uninstall
+{
+
+    # stop service
+    test -f "$pid" && {
+        kill_service
+
+        while true
+        do
+            if ! grep -qE "^([ ]*)*$(< "$pid")" <(ps ax)
+            then
+                remove_pid
+                break
+            fi
+            sleep 1
+        done
+    }
+
+    # remove all
+    echo -e "remove files\n$service\n$binary\n$conf"
+    sudo rm -f "$service" "$binary" "$conf"
+}
+
+# start service
+function appimage_start
+{
+    test -f "$pid" && exit 0
+    echo "starting service ..."
+    setsid "$binary" &
+}
+
+
+# kill service
+function kill_service
+{
+    echo "stopping service ..."
+    process="$(grep -m1 "AppImageLauncherService" <(ps aux))"
+
+    test "${process%%[ ]*}" == 'root' && {
+        sudo killall "$prg" || true
+    } || {
+        killall "$prg" || true
+    }
+}
+
+
+# remove pid file
+function remove_pid
+{
+    if grep -q "root" <(stat "$pid")
+    then
+        sudo rm -f "$pid"
+    else
+        rm -f "$pid"
+    fi
+}
+
+
+# stop service
+function appimage_stop
+{
+    test ! -f "$pid" && exit 0
+    kill_service
+    remove_pid
+}
+
+
+# restart service
+function appimage_restart
+{
+    test -f "$pid" && {
+        echo "restarting service ..."
+        kill_service
+
+        while true
+        do
+            if ! grep -qE "^([ ]*)*$(< "$pid")" <(ps ax)
+            then
+                remove_pid
+                break
+            fi
+            sleep 1
+        done
+    }
+
+    appimage_start
+}
+
+
+# view current service status
+function appimage_status
+{
+    test ! -f "$pid" && {
+        echo "service deactive"
+    } || {
+
+        if grep -qE "^([ ]*)*$(< "$pid")" <(ps ax)
+        then
+            echo -e "$(< "$pid")\nservice active"
+            exit 0
+        fi
+
+        echo "service deactive"
+    }
+}
+
+
+# parameters
+case "$1" in
+    'configure')
+        appimage_config
+        ;;
+    'reconfigure')
+        create_conf
+        ;;
+    'install')
+        appimage_install
+        ;;
+    'reinstall')
+        appimage_reinstall
+        ;;
+    'uninstall')
+        appimage_uninstall
+        ;;
+    'start')
+        appimage_start
+        ;;
+    'stop')
+        appimage_stop
+        ;;
+    'restart')
+        appimage_restart
+        ;;
+    'status')
+        appimage_status
+        ;;
+
+    # Default is "start".
+    *)
+        appimage_start
+        ;;
+esac

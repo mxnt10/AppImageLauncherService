@@ -6,7 +6,13 @@ Serviço de integração de AppImage para o Slackware feito em bash e sem precis
 
 Não execute o comando como superusuário. Ele depende da variável $HOME para as configurações padrão. A instalação irá pedir a senha de root quando necessário.
 
-`$ ./rc.AppImageLauncher install`
+```
+$ git clone https://github.com/mxnt10/AppImageLauncherService.git
+
+$ cd AppImageLauncherService
+
+$ ./rc.AppImageLauncher install
+```
 
 Após a instalação será criado automaticamente o diretório AppImageLauncher no diretório home. Não será necessário pós configuração, ele já estará rodando no sistema.
 
@@ -14,13 +20,17 @@ Após a instalação será criado automaticamente o diretório AppImageLauncher 
 
 Ele já estará funcional após a instalação. Mas é possível configurar as opções caso precise. 
 
-`$ /etc/rc.d/rc.AppImageLauncher configure`
+```
+$ /etc/rc.d/rc.AppImageLauncher configure
+```
 
 Não se preocupe com o root, o serviço irá solicitar sempre que precisar.
 
 Caso queira usar um editor de sua preferência, por exemplo, o kate:
 
-`$ sudo kate /etc/rc.d/rc.AppImageLauncher.conf`
+```
+$ sudo kate /etc/rc.d/rc.AppImageLauncher.conf
+```
 
 As opções configuráveis são:
 
@@ -32,30 +42,42 @@ As opções configuráveis são:
 
 Após as configurações o serviço deve ser reiniciado. Não inventei moda, para maior performance, é bom as configurações serem lidas uma vez.
 
-`$ /etc/rc.d/rc.AppImageLauncher restart`
+```
+$ /etc/rc.d/rc.AppImageLauncher restart
+```
 
 Se precisar redefinir:
 
-`$ /etc/rc.d/rc.AppImageLauncher reconfigure`
+```
+$ /etc/rc.d/rc.AppImageLauncher reconfigure
+```
 
 # Demais opções
 
 Reinstalação do serviço, novamente é bom usar o arquivo usado para instalação:
 
-`$ ./rc.AppImageLauncher reinstall`
+```
+$ ./rc.AppImageLauncher reinstall
+```
 
 Iniciar e parar o serviço:
 
-`$ /etc/rc.d/rc.AppImageLauncher start`
+```
+$ /etc/rc.d/rc.AppImageLauncher start
 
-`$ /etc/rc.d/rc.AppImageLauncher stop`
+$ /etc/rc.d/rc.AppImageLauncher stop
+```
 
 Verificação de status:
 
-`$ /etc/rc.d/rc.AppImageLauncher status`
+```
+$ /etc/rc.d/rc.AppImageLauncher status
+```
 
 # Desinstalação
 
 A desisntalação não detona as operações feitas pelo serviço. Então se preferir, pode desinstalar sem medo. Eu recomendo usar o arquivo usado na instalação.
 
-`$ ./rc.AppImageLauncher uninstall`
+```
+$ ./rc.AppImageLauncher uninstall
+```

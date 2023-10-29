@@ -79,8 +79,6 @@ menu dir: $menu_dir
 user group: $user_group
 create menu: $create_menu"
 
-    count=0
-
     while true
     do
 
@@ -100,12 +98,6 @@ create menu: $create_menu"
 
             # check if directory is not empty
             test "$lst" != '*' && {
-
-                p=(*)
-                test "$count" != "${#p[@]}" && count=${#p[@]} || {
-                    sleep $loop_time
-                    continue
-                }
 
                 default_ifs="$IFS"
                 IFS=$'\n' # for using \n and not space
@@ -232,6 +224,8 @@ create menu: $create_menu"
                     fi
 
                 } # loop for
+
+                IFS="$default_ifs"
 
             } # appimage_dir empty
 

@@ -76,7 +76,7 @@ $ /etc/rc.d/rc.AppImageLauncher status
 
 # Desinstalação
 
-A desisntalação não detona as operações feitas pelo serviço. Então se preferir, pode desinstalar sem medo. Eu recomendo usar o arquivo usado na instalação.
+A desinstalação não detona as operações feitas pelo serviço. Então se preferir, pode desinstalar sem medo. Eu recomendo usar o arquivo usado na instalação.
 
 ```
 $ ./rc.AppImageLauncher uninstall

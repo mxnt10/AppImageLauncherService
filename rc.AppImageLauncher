@@ -126,6 +126,8 @@ create menu: $create_menu"
                         }
                         cd tmp
 
+                        chmod +x "$appimage_dir/$app"
+
                         # extract icon file
                         for i in "svg" "png"
                         {
